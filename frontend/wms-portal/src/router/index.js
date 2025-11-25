@@ -23,24 +23,30 @@ const router = createRouter({
       component: () => import('../layouts/ProtectedLayout.vue'),
       children: [
         {
-          path: '/dashboard',
+          path: 'dashboard',
           name: 'dashboard',
           component: DashboardView,
           meta: { permission: 'dashboard:view' }
         },
         {
-          path: '/users',
+          path: 'users',
           name: 'users',
           component: UsersView,
           meta: { permission: 'user:list' }
         }
       ]
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      redirect: '/'
     }
   ]
 })
 
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
+  console.log('Route guard:', { to: to.path, isPublic: to.meta.public, hasToken: !!userStore.token })
+  
   if (to.meta.public) {
     if (userStore.isAuthenticated && to.name === 'login') {
       next({ name: 'dashboard' })
@@ -50,12 +56,16 @@ router.beforeEach(async (to, from, next) => {
     return
   }
   if (!userStore.token) {
+    console.log('No token, redirecting to login')
     return next({ name: 'login', query: { redirect: to.fullPath } })
   }
   if (!userStore.profile) {
     try {
+      console.log('Bootstrapping user profile...')
       await userStore.bootstrap()
+      console.log('Bootstrap successful')
     } catch (error) {
+      console.error('Bootstrap failed:', error)
       userStore.logout()
       return next({ name: 'login', query: { redirect: to.fullPath } })
     }

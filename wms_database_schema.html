@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 数据库表结构设计</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1, h2, h3 {
+            color: var(--text-primary);
+            margin-top: 2em;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5em;
+            color: var(--primary-color);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+            font-size: 0.95rem;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        tr:hover {
+            background-color: #f8fafc;
+        }
+
+        code {
+            background-color: #f1f5f9;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 0.9em;
+            color: #d63384;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 2em 0;
+            overflow-x: auto;
+        }
+
+        .nav-toc {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        @media (min-width: 1400px) {
+            .nav-toc {
+                display: block;
+            }
+        }
+
+        .nav-toc ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .nav-toc li {
+            margin-bottom: 8px;
+        }
+
+        .nav-toc a {
+            text-decoration: none;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .nav-toc a:hover {
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WMS 数据库表结构设计</h1>
+
+        <div class="card">
+            <h2>1. 实体关系图 (ERD)</h2>
+            <div class="mermaid">
+erDiagram
+    %% Master Data
+    OWNER ||--o{ SKU : owns
+    WAREHOUSE ||--o{ ZONE : contains
+    ZONE ||--o{ LOCATION : contains
+    
+    %% Inbound
+    OWNER ||--o{ ASN : creates
+    ASN ||--o{ ASN_DETAIL : has
+    ASN_DETAIL ||--o{ RECEIPT : receives
+    
+    %% Inventory
+    SKU ||--o{ INVENTORY : stocks
+    LOCATION ||--o{ INVENTORY : stores
+    CONTAINER ||--o{ INVENTORY : holds
+    
+    %% Outbound
+    OWNER ||--o{ ORDER : places
+    ORDER ||--o{ ORDER_DETAIL : has
+    WAVE ||--o{ ORDER : includes
+    ORDER_DETAIL ||--o{ PICK_TASK : generates
+    
+    %% Tasks
+    PICK_TASK }|--|| LOCATION : from
+    PICK_TASK }|--|| CONTAINER : from_to
+
+    class OWNER {
+        bigint id PK
+        string code
+        string name
+        string contact_info
+    }
+    
+    class SKU {
+        bigint id PK
+        bigint owner_id FK
+        string code
+        string name
+        string barcode
+        jsonb specifications
+    }
+    
+    class WAREHOUSE {
+        bigint id PK
+        string code
+        string name
+        string address
+    }
+    
+    class LOCATION {
+        bigint id PK
+        bigint zone_id FK
+        string code
+        string type
+        boolean is_occupied
+    }
+    
+    class INVENTORY {
+        bigint id PK
+        bigint location_id FK
+        bigint sku_id FK
+        decimal quantity
+        string batch_no
+        string status
+    }
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>2. 表结构定义</h2>
+
+            <h3>2.1 主数据 (Master Data)</h3>
+
+            <h4><code>wms_owner</code> (货主)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>货主编码</td></tr>
+                    <tr><td>name</td><td>VARCHAR(100)</td><td>Not Null</td><td>货主名称</td></tr>
+                    <tr><td>status</td><td>INT</td><td>Default 1</td><td>状态 (1:启用, 0:停用)</td></tr>
+                    <tr><td>created_at</td><td>TIMESTAMP</td><td>Default Now</td><td>创建时间</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_sku</code> (物料/SKU)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>owner_id</td><td>BIGINT</td><td>FK, Not Null</td><td>所属货主ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>UK (with owner), Not Null</td><td>SKU编码</td></tr>
+                    <tr><td>name</td><td>VARCHAR(200)</td><td>Not Null</td><td>商品名称</td></tr>
+                    <tr><td>barcode</td><td>VARCHAR(100)</td><td>Index</td><td>条码/UPC</td></tr>
+                    <tr><td>unit</td><td>VARCHAR(20)</td><td>Not Null</td><td>基本单位 (如: 个, 箱, kg)</td></tr>
+                    <tr><td>spec</td><td>JSONB</td><td></td><td>规格信息 (长、宽、高、重)</td></tr>
+                    <tr><td>batch_rules</td><td>JSONB</td><td></td><td>批次管理规则 (如: 必须生产日期)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_warehouse</code> (仓库)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>仓库编码</td></tr>
+                    <tr><td>name</td><td>VARCHAR(100)</td><td>Not Null</td><td>仓库名称</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_zone</code> (库区)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>warehouse_id</td><td>BIGINT</td><td>FK, Not Null</td><td>所属仓库ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>Not Null</td><td>库区编码</td></tr>
+                    <tr><td>type</td><td>VARCHAR(20)</td><td></td><td>库区类型 (存储区, 收货区, 发货区, 质检区)</td></tr>
+                    <tr><td>temperature_zone</td><td>VARCHAR(20)</td><td></td><td>温区要求 (常温, 冷藏, 冷冻)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_location</code> (库位)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>zone_id</td><td>BIGINT</td><td>FK, Not Null</td><td>所属库区ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>UK (within Wh), Not Null</td><td>库位编码 (如: A-01-01)</td></tr>
+                    <tr><td>type</td><td>VARCHAR(20)</td><td></td><td>库位类型 (货架, 托盘位, 地堆)</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td>Default 'AVAILABLE'</td><td>状态 (可用, 锁定, 禁用)</td></tr>
+                    <tr><td>capacity_limit</td><td>JSONB</td><td></td><td>容量限制 (重量/体积)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_container</code> (容器/托盘)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>code</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>容器/托盘号 (LPN)</td></tr>
+                    <tr><td>type</td><td>VARCHAR(20)</td><td></td><td>类型 (托盘, 周转箱, 纸箱)</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td></td><td>状态 (使用中, 空闲, 损坏)</td></tr>
+                </tbody>
+            </table>
+
+            <h3>2.2 入库管理 (Inbound)</h3>
+
+            <h4><code>wms_asn</code> (入库预约单)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>asn_no</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>ASN单号</td></tr>
+                    <tr><td>owner_id</td><td>BIGINT</td><td>FK, Not Null</td><td>货主ID</td></tr>
+                    <tr><td>warehouse_id</td><td>BIGINT</td><td>FK, Not Null</td><td>仓库ID</td></tr>
+                    <tr><td>supplier_code</td><td>VARCHAR(50)</td><td></td><td>供应商编码</td></tr>
+                    <tr><td>expected_arrival</td><td>TIMESTAMP</td><td></td><td>预计到达时间</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td></td><td>状态 (新建, 已到货, 收货中, 已收货, 关闭)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_asn_detail</code> (入库单明细)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>asn_id</td><td>BIGINT</td><td>FK, Not Null</td><td>ASN ID</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK, Not Null</td><td>SKU ID</td></tr>
+                    <tr><td>expected_qty</td><td>DECIMAL(18,4)</td><td>Not Null</td><td>预计数量</td></tr>
+                    <tr><td>received_qty</td><td>DECIMAL(18,4)</td><td>Default 0</td><td>实收数量</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_receipt</code> (收货记录)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>asn_detail_id</td><td>BIGINT</td><td>FK, Not Null</td><td>ASN明细ID</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK, Not Null</td><td>SKU ID</td></tr>
+                    <tr><td>quantity</td><td>DECIMAL(18,4)</td><td>Not Null</td><td>收货数量</td></tr>
+                    <tr><td>batch_no</td><td>VARCHAR(50)</td><td></td><td>批次号</td></tr>
+                    <tr><td>production_date</td><td>DATE</td><td></td><td>生产日期</td></tr>
+                    <tr><td>expiry_date</td><td>DATE</td><td></td><td>过期日期</td></tr>
+                    <tr><td>container_code</td><td>VARCHAR(50)</td><td></td><td>收货容器/托盘号</td></tr>
+                    <tr><td>location_id</td><td>BIGINT</td><td>FK</td><td>收货暂存库位ID</td></tr>
+                </tbody>
+            </table>
+
+            <h3>2.3 库存管理 (Inventory)</h3>
+
+            <h4><code>wms_inventory</code> (库存)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>warehouse_id</td><td>BIGINT</td><td>FK, Not Null</td><td>仓库ID</td></tr>
+                    <tr><td>location_id</td><td>BIGINT</td><td>FK, Not Null</td><td>库位ID</td></tr>
+                    <tr><td>container_code</td><td>VARCHAR(50)</td><td>Index</td><td>容器/托盘号 (可选)</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK, Not Null</td><td>SKU ID</td></tr>
+                    <tr><td>batch_no</td><td>VARCHAR(50)</td><td></td><td>批次号</td></tr>
+                    <tr><td>quantity</td><td>DECIMAL(18,4)</td><td>Not Null</td><td>现有数量 (On-hand)</td></tr>
+                    <tr><td>allocated_qty</td><td>DECIMAL(18,4)</td><td>Default 0</td><td>已分配/预留数量</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td>Default 'GOOD'</td><td>库存状态 (良品, 破损, 质检中, 冻结)</td></tr>
+                    <tr><td>attributes</td><td>JSONB</td><td></td><td>扩展属性 (序列号等)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_inventory_transaction</code> (库存流水)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>transaction_type</td><td>VARCHAR(50)</td><td>Not Null</td><td>事务类型 (收货, 拣货, 移库, 调整)</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK, Not Null</td><td>SKU ID</td></tr>
+                    <tr><td>from_location_id</td><td>BIGINT</td><td>FK</td><td>来源库位ID</td></tr>
+                    <tr><td>to_location_id</td><td>BIGINT</td><td>FK</td><td>目标库位ID</td></tr>
+                    <tr><td>quantity</td><td>DECIMAL(18,4)</td><td>Not Null</td><td>变动数量</td></tr>
+                    <tr><td>reference_no</td><td>VARCHAR(50)</td><td></td><td>关联单号 (订单号, ASN号, 任务号)</td></tr>
+                    <tr><td>created_at</td><td>TIMESTAMP</td><td>Default Now</td><td>发生时间</td></tr>
+                </tbody>
+            </table>
+
+            <h3>2.4 出库管理 (Outbound)</h3>
+
+            <h4><code>wms_order</code> (出库订单)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>order_no</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>订单号</td></tr>
+                    <tr><td>owner_id</td><td>BIGINT</td><td>FK, Not Null</td><td>货主ID</td></tr>
+                    <tr><td>warehouse_id</td><td>BIGINT</td><td>FK, Not Null</td><td>仓库ID</td></tr>
+                    <tr><td>type</td><td>VARCHAR(20)</td><td></td><td>订单类型 (B2B, B2C, 调拨)</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td></td><td>状态 (新建, 已分配, 拣货中, 已打包, 已发货)</td></tr>
+                    <tr><td>priority</td><td>INT</td><td>Default 0</td><td>优先级</td></tr>
+                    <tr><td>receiver_info</td><td>JSONB</td><td></td><td>收货人信息 (姓名, 地址, 电话)</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_order_detail</code> (订单明细)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>order_id</td><td>BIGINT</td><td>FK, Not Null</td><td>订单ID</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK, Not Null</td><td>SKU ID</td></tr>
+                    <tr><td>ordered_qty</td><td>DECIMAL(18,4)</td><td>Not Null</td><td>订购数量</td></tr>
+                    <tr><td>allocated_qty</td><td>DECIMAL(18,4)</td><td>Default 0</td><td>已分配数量</td></tr>
+                    <tr><td>picked_qty</td><td>DECIMAL(18,4)</td><td>Default 0</td><td>已拣货数量</td></tr>
+                    <tr><td>shipped_qty</td><td>DECIMAL(18,4)</td><td>Default 0</td><td>已发货数量</td></tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_wave</code> (波次)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>wave_no</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>波次号</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td></td><td>状态 (已创建, 已释放, 已完成)</td></tr>
+                </tbody>
+            </table>
+
+            <h3>2.5 作业与执行 (Tasks & Execution)</h3>
+
+            <h4><code>wms_task</code> (作业任务)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>id</td><td>BIGINT</td><td>PK, Auto Inc</td><td>主键ID</td></tr>
+                    <tr><td>task_no</td><td>VARCHAR(50)</td><td>UK, Not Null</td><td>任务号</td></tr>
+                    <tr><td>type</td><td>VARCHAR(20)</td><td>Not Null</td><td>任务类型 (上架, 拣货, 补货, 盘点, 移库)</td></tr>
+                    <tr><td>status</td><td>VARCHAR(20)</td><td></td><td>状态 (待处理, 已分配, 进行中, 已完成)</td></tr>
+                    <tr><td>priority</td><td>INT</td><td>Default 0</td><td>优先级</td></tr>
+                    <tr><td>sku_id</td><td>BIGINT</td><td>FK</td><td>SKU ID</td></tr>
+                    <tr><td>from_location_id</td><td>BIGINT</td><td>FK</td><td>来源库位ID</td></tr>
+                    <tr><td>to_location_id</td><td>BIGINT</td><td>FK</td><td>目标库位ID</td></tr>
+                    <tr><td>quantity</td><td>DECIMAL(18,4)</td><td></td><td>计划数量</td></tr>
+                    <tr><td>actual_quantity</td><td>DECIMAL(18,4)</td><td></td><td>实际执行数量</td></tr>
+                    <tr><td>assigned_user_id</td><td>BIGINT</td><td></td><td>分配人员ID</td></tr>
+                    <tr><td>device_code</td><td>VARCHAR(50)</td><td></td><td>分配设备编码 (AGV/机器人)</td></tr>
+                    <tr><td>wave_id</td><td>BIGINT</td><td>FK</td><td>关联波次ID</td></tr>
+                    <tr><td>order_id</td><td>BIGINT</td><td>FK</td><td>关联订单ID</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</body>
+</html>

@@ -7,4 +7,8 @@ import router from './router'
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
+
+// Debug: Log when app is mounted
+console.log('Vue app mounting...')
 app.mount('#app')
+console.log('Vue app mounted successfully')
