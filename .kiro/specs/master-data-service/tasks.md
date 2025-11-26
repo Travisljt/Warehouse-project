@@ -56,7 +56,7 @@
     - 实现搜索方法（按code或name模糊查询）
     - _需求: Requirements 1.1, 1.2, 1.3, 1.4, 1.5, 9.1_
   
-  - [ ] 3.4 实现OwnerController REST API
+  - [x] 3.4 实现OwnerController REST API
     - 创建OwnerController
     - 实现POST /api/masterdata/owners
     - 实现PUT /api/masterdata/owners/{id}
@@ -66,6 +66,7 @@
     - 实现GET /api/masterdata/owners/search
     - 添加参数验证注解
     - _需求: Requirements 6.1, 6.6_
+    - _注意: 此任务仅需实现功能,不要求编写测试_
   
   - [ ]* 3.5 编写属性测试：Owner唯一性约束
     - **Property 2: 唯一性约束强制执行**
