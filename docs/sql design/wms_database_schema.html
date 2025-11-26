@@ -1,0 +1,1321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS 数据库表结构设计</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--text-primary);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1,
+        h2,
+        h3 {
+            color: var(--text-primary);
+            margin-top: 2em;
+        }
+
+        h1 {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 1.5em;
+            color: var(--primary-color);
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1em 0;
+            font-size: 0.95rem;
+        }
+
+        th,
+        td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        th {
+            background-color: #f1f5f9;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        tr:hover {
+            background-color: #f8fafc;
+        }
+
+        code {
+            background-color: #f1f5f9;
+            padding: 0.2em 0.4em;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 0.9em;
+            color: #d63384;
+        }
+
+        .mermaid {
+            display: flex;
+            justify-content: center;
+            margin: 2em 0;
+            overflow-x: auto;
+        }
+
+        .base-entity {
+            background-color: #fef3c7;
+            border-left: 4px solid #f59e0b;
+        }
+
+        .nav-toc {
+            position: fixed;
+            right: 20px;
+            top: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            max-height: 80vh;
+            overflow-y: auto;
+            display: none;
+        }
+
+        @media (min-width: 1400px) {
+            .nav-toc {
+                display: block;
+            }
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>WMS 数据库表结构设计</h1>
+
+        <div class="card">
+            <h2>1. 实体关系图 (ERD)</h2>
+            <div class="mermaid">
+                erDiagram
+                %% Master Data - Product Related
+                OWNER ||--o{ CONTACT : has
+                OWNER ||--o{ PRODUCT : owns
+                PRODUCT_CATEGORY ||--o{ PRODUCT : categorizes
+                PRODUCT ||--o{ BARCODE : has
+
+                %% Warehouse Management
+                WAREHOUSE ||--o{ ZONE : contains
+                ZONE ||--o{ LOCATION : contains
+                LOCATION_PROFILE ||--o{ ZONE : "applies to"
+                LOCATION_PROFILE ||--o{ LOCATION : defines
+
+                %% Inbound
+                OWNER ||--o{ ASN : creates
+                ASN ||--o{ ASN_DETAIL : has
+                ASN_DETAIL ||--o{ RECEIPT : receives
+
+                %% Inventory
+                PRODUCT ||--o{ INVENTORY : stocks
+                LOCATION ||--o{ INVENTORY : stores
+                CONTAINER ||--o{ INVENTORY : holds
+
+                %% Outbound
+                OWNER ||--o{ ORDER : places
+                ORDER ||--o{ ORDER_DETAIL : has
+                WAVE ||--o{ ORDER : includes
+                ORDER_DETAIL ||--o{ PICK_TASK : generates
+
+                %% Tasks
+                PICK_TASK }|--|| LOCATION : from
+                PICK_TASK }|--|| CONTAINER : from_to
+
+                OWNER {
+                bigint id PK
+                string code UK
+                string name
+                int status
+                }
+
+                CONTACT {
+                bigint id PK
+                bigint owner_id FK
+                string contact_name
+                string phone
+                string email
+                string address
+                }
+
+                PRODUCT {
+                bigint id PK
+                bigint owner_id FK
+                bigint category_id FK
+                string code UK
+                string name
+                string unit
+                text spec
+                }
+
+                PRODUCT_CATEGORY {
+                bigint id PK
+                string code UK
+                string name
+                bigint parent_id
+                }
+
+                BARCODE {
+                bigint id PK
+                bigint product_id FK
+                string barcode UK
+                string type
+                int is_primary
+                }
+
+                WAREHOUSE {
+                bigint id PK
+                string code UK
+                string name
+                string address
+                }
+
+                ZONE {
+                bigint id PK
+                bigint warehouse_id FK
+                bigint location_profile_id FK
+                string code
+                string type
+                }
+
+                LOCATION_PROFILE {
+                bigint id PK
+                string code UK
+                string name
+                string location_type
+                text capacity_config
+                }
+
+                LOCATION {
+                bigint id PK
+                bigint zone_id FK
+                bigint location_profile_id FK
+                string code UK
+                string status
+                }
+
+                INVENTORY {
+                bigint id PK
+                bigint location_id FK
+                bigint product_id FK
+                decimal quantity
+                string batch_no
+                string status
+                }
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>2. 基础实体 (Base Entity)</h2>
+            <p>所有业务表都继承以下公共字段，用于审计追踪、乐观锁控制和逻辑删除：</p>
+
+            <h4><code>BaseEntity</code> (公共字段)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody class="base-entity">
+                    <tr>
+                        <td>create_date</td>
+                        <td>TIMESTAMP</td>
+                        <td>Not Null, Default Now</td>
+                        <td>创建时间</td>
+                    </tr>
+                    <tr>
+                        <td>create_by</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>创建人</td>
+                    </tr>
+                    <tr>
+                        <td>update_date</td>
+                        <td>TIMESTAMP</td>
+                        <td></td>
+                        <td>更新时间</td>
+                    </tr>
+                    <tr>
+                        <td>update_by</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>更新人</td>
+                    </tr>
+                    <tr>
+                        <td>delete_flag</td>
+                        <td>INT</td>
+                        <td>Not Null, Default 0</td>
+                        <td>逻辑删除标志 (0:存在, 1:删除)</td>
+                    </tr>
+                    <tr>
+                        <td>version</td>
+                        <td>INT</td>
+                        <td>Not Null, Default 1</td>
+                        <td>乐观锁版本号</td>
+                    </tr>
+                </tbody>
+            </table>
+            <p><strong>说明：</strong></p>
+            <ul>
+                <li><code>version</code> 字段用于乐观锁控制，每次更新时自动递增，防止并发修改冲突</li>
+                <li><code>delete_flag</code> 字段用于逻辑删除，0表示数据存在，1表示数据已删除</li>
+                <li>所有查询默认需要添加 <code>WHERE delete_flag = 0</code> 条件</li>
+            </ul>
+        </div>
+
+        <div class="card">
+            <h2>3. 表结构定义</h2>
+
+            <h3>3.1 主数据 (Master Data)</h3>
+
+            <h4><code>wms_owner</code> (货主)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>货主编码</td>
+                    </tr>
+                    <tr>
+                        <td>name</td>
+                        <td>VARCHAR(100)</td>
+                        <td>Not Null</td>
+                        <td>货主名称</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_contact</code> (联系方式)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>owner_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>所属货主ID</td>
+                    </tr>
+                    <tr>
+                        <td>contact_name</td>
+                        <td>VARCHAR(100)</td>
+                        <td>Not Null</td>
+                        <td>联系人姓名</td>
+                    </tr>
+                    <tr>
+                        <td>phone</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>联系电话</td>
+                    </tr>
+                    <tr>
+                        <td>mobile</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>手机号码</td>
+                    </tr>
+                    <tr>
+                        <td>email</td>
+                        <td>VARCHAR(100)</td>
+                        <td></td>
+                        <td>电子邮箱</td>
+                    </tr>
+                    <tr>
+                        <td>address</td>
+                        <td>VARCHAR(500)</td>
+                        <td></td>
+                        <td>联系地址</td>
+                    </tr>
+                    <tr>
+                        <td>is_primary</td>
+                        <td>INT</td>
+                        <td>Default 0</td>
+                        <td>是否主要联系人 (1:是, 0:否)</td>
+                    </tr>
+                    <tr>
+                        <td>remark</td>
+                        <td>VARCHAR(500)</td>
+                        <td></td>
+                        <td>备注</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_product_category</code> (产品类别)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>类别编码</td>
+                    </tr>
+                    <tr>
+                        <td>name</td>
+                        <td>VARCHAR(100)</td>
+                        <td>Not Null</td>
+                        <td>类别名称</td>
+                    </tr>
+                    <tr>
+                        <td>parent_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>父类别ID (支持多级分类)</td>
+                    </tr>
+                    <tr>
+                        <td>level</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>层级深度</td>
+                    </tr>
+                    <tr>
+                        <td>path</td>
+                        <td>VARCHAR(500)</td>
+                        <td></td>
+                        <td>层级路径 (如: /1/2/3/)</td>
+                    </tr>
+                    <tr>
+                        <td>sort_order</td>
+                        <td>INT</td>
+                        <td>Default 0</td>
+                        <td>排序序号</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_product</code> (产品/物料)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>owner_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>所属货主ID</td>
+                    </tr>
+                    <tr>
+                        <td>category_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>产品类别ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK (with owner), Not Null</td>
+                        <td>产品编码</td>
+                    </tr>
+                    <tr>
+                        <td>name</td>
+                        <td>VARCHAR(200)</td>
+                        <td>Not Null</td>
+                        <td>产品名称</td>
+                    </tr>
+                    <tr>
+                        <td>short_name</td>
+                        <td>VARCHAR(100)</td>
+                        <td></td>
+                        <td>产品简称</td>
+                    </tr>
+                    <tr>
+                        <td>unit</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Not Null</td>
+                        <td>基本单位 (如: 个, 箱, kg)</td>
+                    </tr>
+                    <tr>
+                        <td>spec</td>
+                        <td>TEXT</td>
+                        <td></td>
+                        <td>规格信息 (JSON格式: 长、宽、高、重)</td>
+                    </tr>
+                    <tr>
+                        <td>batch_rules</td>
+                        <td>TEXT</td>
+                        <td></td>
+                        <td>批次管理规则 (JSON格式)</td>
+                    </tr>
+                    <tr>
+                        <td>shelf_life_days</td>
+                        <td>INT</td>
+                        <td></td>
+                        <td>保质期天数</td>
+                    </tr>
+                    <tr>
+                        <td>storage_condition</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>存储条件 (常温/冷藏/冷冻)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_barcode</code> (条码映射)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>product_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>对应产品ID</td>
+                    </tr>
+                    <tr>
+                        <td>barcode</td>
+                        <td>VARCHAR(100)</td>
+                        <td>UK, Not Null</td>
+                        <td>条码值</td>
+                    </tr>
+                    <tr>
+                        <td>type</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>条码类型 (EAN/UPC/QR 等)</td>
+                    </tr>
+                    <tr>
+                        <td>is_primary</td>
+                        <td>INT</td>
+                        <td>Default 0</td>
+                        <td>是否主条码 (1:是, 0:否)</td>
+                    </tr>
+                    <tr>
+                        <td>remark</td>
+                        <td>VARCHAR(500)</td>
+                        <td></td>
+                        <td>备注</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>3.2 仓储管理</h3>
+
+            <h4><code>wms_warehouse</code> (仓库)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>仓库编码</td>
+                    </tr>
+                    <tr>
+                        <td>name</td>
+                        <td>VARCHAR(100)</td>
+                        <td>Not Null</td>
+                        <td>仓库名称</td>
+                    </tr>
+                    <tr>
+                        <td>address</td>
+                        <td>VARCHAR(500)</td>
+                        <td></td>
+                        <td>仓库地址</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>状态 (1:启用, 0:停用)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_zone</code> (库区)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>warehouse_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>所属仓库ID</td>
+                    </tr>
+                    <tr>
+                        <td>location_profile_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>默认库位配置ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>Not Null</td>
+                        <td>库区编码</td>
+                    </tr>
+                    <tr>
+                        <td>type</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>库区类型 (收货/存储/拣选/发货等)</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>状态</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_location_profile</code> (库位配置)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>配置编码</td>
+                    </tr>
+                    <tr>
+                        <td>name</td>
+                        <td>VARCHAR(100)</td>
+                        <td>Not Null</td>
+                        <td>配置名称</td>
+                    </tr>
+                    <tr>
+                        <td>location_type</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>库位类型 (地堆/货架/冷藏等)</td>
+                    </tr>
+                    <tr>
+                        <td>capacity_config</td>
+                        <td>TEXT</td>
+                        <td></td>
+                        <td>容量配置 (JSON)</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>状态</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_location</code> (库位)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>zone_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>所属库区ID</td>
+                    </tr>
+                    <tr>
+                        <td>location_profile_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>库位配置ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>库位编码</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'AVAILABLE'</td>
+                        <td>状态 (AVAILABLE/OCCUPIED/LOCKED)</td>
+                    </tr>
+                    <tr>
+                        <td>pickable</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>是否可拣选</td>
+                    </tr>
+                    <tr>
+                        <td>storable</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>是否可存储</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_container</code> (容器)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>code</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>容器编码</td>
+                    </tr>
+                    <tr>
+                        <td>type</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>容器类型 (箱/托盘/料架等)</td>
+                    </tr>
+                    <tr>
+                        <td>location_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>当前所在库位ID</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>INT</td>
+                        <td>Default 1</td>
+                        <td>状态 (1:启用, 0:停用)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>3.3 库存</h3>
+
+            <h4><code>wms_inventory</code> (库存)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>location_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>库位ID</td>
+                    </tr>
+                    <tr>
+                        <td>product_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>产品ID</td>
+                    </tr>
+                    <tr>
+                        <td>container_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>容器ID</td>
+                    </tr>
+                    <tr>
+                        <td>quantity</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null, Default 0</td>
+                        <td>可用数量</td>
+                    </tr>
+                    <tr>
+                        <td>allocated_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null, Default 0</td>
+                        <td>已分配数量</td>
+                    </tr>
+                    <tr>
+                        <td>batch_no</td>
+                        <td>VARCHAR(100)</td>
+                        <td></td>
+                        <td>批次号</td>
+                    </tr>
+                    <tr>
+                        <td>serial_no</td>
+                        <td>VARCHAR(100)</td>
+                        <td></td>
+                        <td>序列号/唯一码</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'AVAILABLE'</td>
+                        <td>库存状态</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>3.4 入库</h3>
+
+            <h4><code>wms_asn</code> (预到货通知)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>owner_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>货主ID</td>
+                    </tr>
+                    <tr>
+                        <td>warehouse_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>仓库ID</td>
+                    </tr>
+                    <tr>
+                        <td>asn_no</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>ASN单号</td>
+                    </tr>
+                    <tr>
+                        <td>expected_arrival_date</td>
+                        <td>DATE</td>
+                        <td></td>
+                        <td>预计到货日期</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'CREATED'</td>
+                        <td>状态 (CREATED/RECEIVING/CLOSED)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_asn_detail</code> (预到货明细)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>asn_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>ASN主表ID</td>
+                    </tr>
+                    <tr>
+                        <td>product_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>产品ID</td>
+                    </tr>
+                    <tr>
+                        <td>expected_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null</td>
+                        <td>预计数量</td>
+                    </tr>
+                    <tr>
+                        <td>received_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null, Default 0</td>
+                        <td>已收数量</td>
+                    </tr>
+                    <tr>
+                        <td>batch_no</td>
+                        <td>VARCHAR(100)</td>
+                        <td></td>
+                        <td>批次号</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_receipt</code> (收货记录)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>asn_detail_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>关联ASN明细ID</td>
+                    </tr>
+                    <tr>
+                        <td>location_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>上架库位ID</td>
+                    </tr>
+                    <tr>
+                        <td>container_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>存放容器ID</td>
+                    </tr>
+                    <tr>
+                        <td>quantity</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null</td>
+                        <td>收货数量</td>
+                    </tr>
+                    <tr>
+                        <td>received_at</td>
+                        <td>TIMESTAMP</td>
+                        <td>Not Null, Default Now</td>
+                        <td>收货时间</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h3>3.5 出库</h3>
+
+            <h4><code>wms_order</code> (出库订单)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>owner_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>货主ID</td>
+                    </tr>
+                    <tr>
+                        <td>warehouse_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>仓库ID</td>
+                    </tr>
+                    <tr>
+                        <td>order_no</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>订单号</td>
+                    </tr>
+                    <tr>
+                        <td>order_type</td>
+                        <td>VARCHAR(50)</td>
+                        <td></td>
+                        <td>订单类型 (销售/调拨等)</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'CREATED'</td>
+                        <td>状态 (CREATED/WAVED/PICKING/SHIPPED)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_order_detail</code> (出库明细)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>order_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>订单主表ID</td>
+                    </tr>
+                    <tr>
+                        <td>product_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>产品ID</td>
+                    </tr>
+                    <tr>
+                        <td>order_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null</td>
+                        <td>订购数量</td>
+                    </tr>
+                    <tr>
+                        <td>allocated_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null, Default 0</td>
+                        <td>已分配数量</td>
+                    </tr>
+                    <tr>
+                        <td>picked_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null, Default 0</td>
+                        <td>已拣数量</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_wave</code> (波次)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>warehouse_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>仓库ID</td>
+                    </tr>
+                    <tr>
+                        <td>wave_no</td>
+                        <td>VARCHAR(50)</td>
+                        <td>UK, Not Null</td>
+                        <td>波次编号</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'CREATED'</td>
+                        <td>状态 (CREATED/RELEASED/CLOSED)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <h4><code>wms_pick_task</code> (拣选任务)</h4>
+            <table>
+                <thead>
+                    <tr>
+                        <th>字段名</th>
+                        <th>类型</th>
+                        <th>约束</th>
+                        <th>中文说明</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>id</td>
+                        <td>BIGINT</td>
+                        <td>PK, Auto Inc</td>
+                        <td>主键ID</td>
+                    </tr>
+                    <tr>
+                        <td>order_detail_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>关联出库明细ID</td>
+                    </tr>
+                    <tr>
+                        <td>location_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>拣选来源库位ID</td>
+                    </tr>
+                    <tr>
+                        <td>container_id</td>
+                        <td>BIGINT</td>
+                        <td>FK</td>
+                        <td>拣选目标容器ID</td>
+                    </tr>
+                    <tr>
+                        <td>product_id</td>
+                        <td>BIGINT</td>
+                        <td>FK, Not Null</td>
+                        <td>产品ID</td>
+                    </tr>
+                    <tr>
+                        <td>task_qty</td>
+                        <td>DECIMAL(18,6)</td>
+                        <td>Not Null</td>
+                        <td>任务数量</td>
+                    </tr>
+                    <tr>
+                        <td>status</td>
+                        <td>VARCHAR(20)</td>
+                        <td>Default 'CREATED'</td>
+                        <td>状态 (CREATED/IN_PROGRESS/DONE)</td>
+                    </tr>
+                    <tr class="base-entity">
+                        <td colspan="4">+ BaseEntity 公共字段</td>
+                    </tr>
+                </tbody>
+            </table>
+
+        </div>
+
+    </div>
+
+</body>
+
+</html>

@@ -32,6 +32,7 @@
         <module>common/core</module>
         <module>system/system-auth</module>
         <module>system/system-gateway</module>
+        <module>wms/wms-masterdata</module>
     </modules>
 
     <dependencyManagement>

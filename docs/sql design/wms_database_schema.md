@@ -82,7 +82,6 @@ erDiagram
 | id | BIGINT | PK, Auto Inc | Primary Key |
 | code | VARCHAR(50) | UK, Not Null | Owner Code |
 | name | VARCHAR(100) | Not Null | Owner Name |
-| status | INT | Default 1 | 1: Active, 0: Inactive |
 | created_at | TIMESTAMP | Default Now | Creation Time |
 
 #### `wms_sku` (物料/SKU)

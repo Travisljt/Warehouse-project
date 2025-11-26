@@ -61,8 +61,11 @@ start_backend_services() {
     mkdir -p "$log_dir"
 
     echo "  🔧 启动认证服务..."
-    mvn -pl system/system-auth spring-boot:run > "${log_dir}/system-auth.log" 2>&1 &
-    AUTH_PID=$!
+    # 暂时注释掉认证服务，因为存在兼容性问题
+    # mvn -pl system/system-auth spring-boot:run > "${log_dir}/system-auth.log" 2>&1 &
+    # AUTH_PID=$!
+    echo "    ⚠️  认证服务暂时跳过（兼容性问题）"
+    AUTH_PID=""
 
     echo "  🌐 启动网关服务..."
     mvn -pl system/system-gateway spring-boot:run > "${log_dir}/system-gateway.log" 2>&1 &
@@ -82,7 +85,7 @@ start_backend_services() {
             echo "  ❌ system-auth (PID: ${AUTH_PID}) - 健康检查失败"
         fi
     else
-        echo "  ❌ system-auth - 进程未运行"
+        echo "  ⚠️  system-auth - 暂时跳过（兼容性问题）"
     fi
 
     if kill -0 ${GATEWAY_PID} 2>/dev/null; then
@@ -148,6 +151,8 @@ main() {
     echo ""
     echo "⚡ 按 Ctrl+C 停止所有服务"
 
+    # 保存进程ID到文件
+    echo "${AUTH_PID:-} ${GATEWAY_PID:-} ${FRONTEND_PID:-}" > "${PROJECT_ROOT}/.service-pids"
 
     # 等待服务运行
     cleanup() {
@@ -181,6 +186,7 @@ main() {
         fi
     done
 
+    rm -f "${PROJECT_ROOT}/.service-pids"
 }
 
 main "$@"

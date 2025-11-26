@@ -1,0 +1,41 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: master-data-service
+  datasource:
+    url: ${WMS_DB_URL:jdbc:postgresql://localhost:5432/wms}
+    username: ${WMS_DB_USERNAME:wms}
+    password: ${WMS_DB_PASSWORD:wms@123}
+    driver-class-name: org.postgresql.Driver
+  jackson:
+    serialization:
+      WRITE_DATES_AS_TIMESTAMPS: false
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleteFlag
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+    banner: false
+
+sa-token:
+  token-name: Authorization
+  timeout: 2592000
+  activity-timeout: -1
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+
+logging:
+  level:
+    com.example.wms: debug
+  file:
+    name: logs/master-data-service.log
