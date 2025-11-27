@@ -1,4 +1,4 @@
-package com.example.wms.masterdata;
+package com.travislai.wms.masterdata;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;

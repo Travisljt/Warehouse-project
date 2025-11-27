@@ -36,5 +36,4 @@ sa-token:
 
 logging:
   level:
-    com.example.wms: debug
-
+    com.travislai.wms: debug

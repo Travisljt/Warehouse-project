@@ -1,7 +1,7 @@
-package com.example.wms.masterdata.domain.entity;
+package com.travislai.wms.masterdata.domain.entity;
 
 import cn.dev33.satoken.stp.StpUtil;
-import com.example.wms.masterdata.domain.mapper.OwnerMapper;
+import com.travislai.wms.masterdata.domain.mapper.OwnerMapper;
 import net.jqwik.api.*;
 import net.jqwik.spring.JqwikSpringSupport;
 import org.springframework.beans.factory.annotation.Autowired;

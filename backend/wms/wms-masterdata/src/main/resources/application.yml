@@ -36,6 +36,6 @@ sa-token:
 
 logging:
   level:
-    com.example.wms: debug
+    com.travislai.wms: debug
   file:
     name: logs/master-data-service.log
