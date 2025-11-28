@@ -25,6 +25,10 @@
 
 set -e  # Exit on error
 
+# Resolve script and project root so script works when invoked from any CWD
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Database configuration
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"
@@ -107,7 +111,7 @@ discover_databases() {
             DATABASES["$db_name"]="$sql_file"
             print_step "Found database: $db_name (from $filename)"
         fi
-    done < <(find backend -type f -name "*_init.sql" -path "*/src/main/resources/*" -print0 2>/dev/null | sort -z)
+    done < <(find "$PROJECT_ROOT/backend" -type f -name "*_init.sql" -path "*/src/main/resources/*" -print0 2>/dev/null | sort -z)
     
     if [ ${#DATABASES[@]} -eq 0 ]; then
         print_warning "No *_init.sql files found"
@@ -185,6 +189,52 @@ execute_sql_file() {
     fi
 }
 
+# Function to grant all privileges on all tables, sequences, and functions to the database user
+# This ensures new tables/functions are always授权, following open-closed principle
+grant_all_privileges() {
+    local db_name=$1
+    local username=$db_name
+    print_info "Granting all privileges on tables, sequences, and functions in '$db_name' to user '$username'..."
+    
+    # Step 1: Grant on all existing tables
+    PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d $db_name <<EOF > /dev/null 2>&1
+        -- Grant on all tables
+        GRANT USAGE ON SCHEMA public TO $username;
+        GRANT CREATE ON SCHEMA public TO $username;
+        DO \$\$
+        DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP
+                EXECUTE 'GRANT ALL PRIVILEGES ON TABLE public.' || quote_ident(r.tablename) || ' TO $username';
+            END LOOP;
+        END
+        \$\$;
+        
+        -- Grant on all sequences
+        DO \$\$
+        DECLARE
+            r RECORD;
+        BEGIN
+            FOR r IN SELECT sequencename FROM pg_sequences WHERE schemaname = 'public' LOOP
+                EXECUTE 'GRANT ALL PRIVILEGES ON SEQUENCE public.' || quote_ident(r.sequencename) || ' TO $username';
+            END LOOP;
+        END
+        \$\$;
+        
+        -- Grant default privileges for future tables/sequences
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO $username;
+        ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO $username;
+EOF
+    
+    if [ $? -eq 0 ]; then
+        print_success "  ✓ All privileges granted to '$username' in '$db_name'"
+    else
+        print_error "  ✗ Failed to grant privileges to '$username' in '$db_name'"
+        return 1
+    fi
+}
+
 # Function to initialize all databases
 initialize_databases() {
     local init_success=0
@@ -210,6 +260,8 @@ initialize_databases() {
         init_file="${DATABASES[$db_name]}"
         if execute_sql_file "$init_file" "$db_name" "INIT"; then
             init_success=$((init_success + 1))
+            # 授权所有表/序列/函数给同名用户，保证开闭原则
+            grant_all_privileges "$db_name"
         else
             init_fail=$((init_fail + 1))
         fi

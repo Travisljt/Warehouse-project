@@ -5,9 +5,9 @@ spring:
   application:
     name: master-data-service
   datasource:
-    url: ${WMS_DB_URL:jdbc:postgresql://localhost:5432/wms}
-    username: ${WMS_DB_USERNAME:wms}
-    password: ${WMS_DB_PASSWORD:wms@123}
+    url: ${WMS_DB_URL:jdbc:postgresql://localhost:5432/master_data}
+    username: ${WMS_DB_USERNAME:master_data}
+    password: ${WMS_DB_PASSWORD:master_data}
     driver-class-name: org.postgresql.Driver
   jackson:
     serialization:

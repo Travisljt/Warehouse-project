@@ -5,13 +5,13 @@ spring:
   application:
     name: auth-service
   datasource:
-    url: ${WMS_DB_URL:jdbc:postgresql://localhost:5432/wms}
-    username: ${WMS_DB_USERNAME:wms}
-    password: ${WMS_DB_PASSWORD:wms@123}
+    url: ${WMS_DB_URL:jdbc:postgresql://localhost:5432/auth}
+    username: ${WMS_DB_USERNAME:auth}
+    password: ${WMS_DB_PASSWORD:auth}
     driver-class-name: org.postgresql.Driver
   jackson:
     serialization:
-      WRITE_DATES_AS_TIMESTAMPS: false
+      WRITE_DATES_AS_TIMESTAMPS: true
   sql:
     init:
       mode: always
