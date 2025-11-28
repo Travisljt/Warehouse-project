@@ -249,24 +249,8 @@ initialize_databases() {
     echo ""
     echo "Total:"
     echo "  ${GREEN}✓ Success: $((init_success + insert_success))${NC}"
-    if [ $((init_
-        echo ""
-        print_success "Database '$db_name' initialized: ✓ $db_success succeeded, ✗ $db_fail failed"
-        echo ""
-        
-        total_success=$((total_success + db_success))
-        total_fail=$((total_fail + db_fail))
-    done
-    
-    # Final Summary
-    echo "========================================"
-    echo "  Final Summary"
-    echo "========================================"
-    echo ""
-    echo "Total SQL files executed:"
-    echo "  ${GREEN}✓ Success: $total_success${NC}"
-    if [ $total_fail -gt 0 ]; then
-        echo "  ${RED}✗ Failed: $total_fail${NC}"
+    if [ $((init_fail + insert_fail)) -gt 0 ]; then
+        echo "  ${RED}✗ Failed: $((init_fail + insert_fail))${NC}"
     fi
     echo "========================================"
 }
@@ -280,66 +264,44 @@ main() {
     echo "========================================"
     echo ""
     echo "Configuration:"
-    echo "  Host:          $DB_HOST"
-    echo "  Port:          $DB_PORT"
-    echo "  Travis User:   $TRAVIS_USER"
+    echo "  Host: $DB_HOST"
+    echo "  Port: $DB_PORT"
+    echo "  Travis User: $TRAVIS_USER"
     echo ""
     
-    # Check PostgreSQL connection (as postgres superuser)
+    # Step 1: Check PostgreSQL connection
     if ! check_postgres; then
         exit 1
     fi
     echo ""
     
-    # Step 1: Discover databases from *_init.sql files
-    echo "========================================"
-    echo "  Step 1: Discovering Databases"
-    echo "========================================"
-    echo ""
-    discover_databases
-    
-    if [ ${#DISCOVERED_DATABASES[@]} -eq 0 ]; then
-        print_error "No databases discovered. Exiting."
-        exit 1
-    fi
-    
     # Step 2: Create travis superuser
     echo "========================================"
-    echo "  Step 2: Creating Travis Superuser"
+    echo "  Step 1: Setup Travis User"
     echo "========================================"
     echo ""
     create_travis_user
+    echo ""
     
-    # Step 3: Drop discovered databases
+    # Step 3: Discover databases
     echo "========================================"
-    echo "  Step 3: Dropping Discovered Databases"
+    echo "  Step 2: Discover Databases"
     echo "========================================"
     echo ""
-    drop_discovered_databases
+    if ! discover_databases; then
+        print_error "No databases to initialize"
+        exit 1
+    fi
     
-    # Step 4: Create databases and users
+    # Step 4: Initialize all databases
     echo "========================================"
-    echo "  Step 4: Creating Databases & Users"
+    echo "  Step 3: Initialize Databases"
     echo "========================================"
     echo ""
-    for db_name in "${DISCOVERED_DATABASES[@]}"; do
-        create_database_and_user "$db_name"
-    done
-    
-    # Step 5: Initialize all databases
-    echo "========================================"
-    echo "  Step 5: Initializing Databases"
-    echo "========================================"
-    echo ""
-    initialize_all_databases
+    initialize_databases
     
     echo ""
-    print_success "✓ All databases initialized successfully!"
-    echo ""
-    echo "Database Summary:"
-    for db_name in "${DISCOVERED_DATABASES[@]}"; do
-        echo "  • Database: $db_name | User: $db_name | Password: $db_name"
-    done
+    print_success "Database initialization completed!"
     echo ""
 }
 

@@ -21,45 +21,54 @@
 
 ### init-database.sh
 
-**完全重置并初始化数据库脚本**，会自动：
-1. 删除所有非系统数据库（保留 postgres, template0, template1）
-2. 删除所有非系统用户（保留 postgres 等系统用户）
-3. 创建 travis 超级用户（如果不存在则创建，存在则复用）
-4. 创建应用数据库
-5. 扫描所有后端服务的 `src/main/resources/*_init.sql` 文件（表结构）
-6. 扫描所有后端服务的 `src/main/resources/*_insert.sql` 文件（默认数据）
-7. 分两个阶段执行：先创建表，再插入数据
+**智能数据库初始化脚本（遵循开闭原则）**
 
-⚠️ **警告：此脚本会清空所有数据库和用户，请谨慎使用！**
+**设计原则：**
+- **开放扩展**：添加新服务时，只需在服务的 `src/main/resources/` 目录下创建 `{db_name}_init.sql` 文件，脚本会自动发现并处理
+- **关闭修改**：无需修改此脚本即可支持新的数据库和服务
+
+**执行步骤：**
+1. 创建 travis 超级用户（如果不存在则创建，存在则复用）
+2. 自动发现所有 `*_init.sql` 文件，从文件名提取数据库名
+3. 对每个发现的数据库：
+   - Drop 并重新创建数据库
+   - 创建对应的数据库用户（用户名=数据库名，密码=数据库名）
+   - 执行 `{db_name}_init.sql`（建表）
+   - 执行 `{db_name}_insert.sql`（插入数据，如果存在）
+
+**命名规则：**
+- `{db_name}_init.sql` → 数据库名为 `{db_name}`
+- 例如：`auth_init.sql` → 数据库名为 `auth`，用户名为 `auth`，密码为 `auth`
+- 例如：`master_data_init.sql` → 数据库名为 `master_data`，用户名为 `master_data`，密码为 `master_data`
 
 ## 使用方法
 
 ### 基本使用
 
 ```bash
-# 使用默认配置（需要提供postgres超级用户密码）
-POSTGRES_PASSWORD=your_postgres_password ./scripts/init-database.sh
-
-# 如果postgres用户密码就是"postgres"
+# 使用默认配置
 ./scripts/init-database.sh
+
+# 如果postgres用户密码不是默认的"postgres"
+POSTGRES_PASSWORD=your_postgres_password ./scripts/init-database.sh
 ```
 
 ### 自定义配置
 
-通过环境变量自定义数据库连接参数：
-
 ```bash
-# 完整自定义配置
-POSTGRES_PASSWORD=your_postgres_password \
-DB_HOST=localhost \
+# 自定义数据库主机和端口
+POSTGRES_PASSWORD=your_password \
+DB_HOST=192.168.1.100 \
 DB_PORT=5432 \
-DB_NAME=wms_db \
-DB_USER=travis \
-DB_PASSWORD=39287526 \
 ./scripts/init-database.sh
 ```
 
 ### 默认配置
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| POSTGRES_PASSWORD | postgres | PostgreSQL超级用户密码 |
+| DB_HOST | localhost |
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
