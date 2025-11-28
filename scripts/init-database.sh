@@ -118,138 +118,138 @@ discover_databases() {
     echo ""
 }
 
-# Function to drop atname = '$db_name' AND pid <> pg_backend_pid();
-        " > /dev/null 2>&1
-        
-        # Drop the database
-        PGPASSWORD=${POSTGRES_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -c "DROP DATABASE IF EXISTS \"$db_name\";" > /dev/null 2>&1
-        print_success "  ✓ Dropped database: $db_name"
-    done
-    echo ""
-}
-
-# Function to create travis superuser if not exists
-create_travis_user() {
-    print_info "Checking if user '$TRAVIS_USER' exists..."
-    
-    USER_EXISTS=$(PGPASSWORD=${POSTGRES_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -tAc "SELECT 1 FROM pg_user WHERE usename='$TRAVIS_USER'")
-    
-    if [ "$USER_EXISTS" = "1" ]; then
-        print_success "  ✓ User '$TRAVIS_USER' already exists, using existing user"
-    else
-        print_info "Creating superuser '$TRAVIS_USER'..."
-        PGPASSWORD=${POSTGRES_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U postgres -d postgres -c "
-            CREATE USER $TRAVIS_USER WITH SUPERUSER PASSWORD '$TRAVIS_PASSWORD';
-        " > /dev/null 2>&1
-        print_success "  ✓ Superuser '$TRAVIS_USER' created successfully"
-    fi
-    echo ""
-}
-
-# Function to create database and its user
-create_database_and_user() {
+# Function to drop and recreate a database
+recreate_database() {
     local db_name=$1
-    local db_user=$db_name
-    local db_password=$db_name
     
-    print_step "Setting up database: $db_name"
+    print_step "Processing database: $db_name"
     
-    # Create user if not exists
-    USER_EXISTS=$(PGPASSWORD=${TRAVIS_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -tAc "SELECT 1 FROM pg_user WHERE usename='$db_user'")
+    # Terminate all connections
+    PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
+        SELECT pg_terminate_backend(pid) 
+        FROM pg_stat_activity 
+        WHERE datname = '$db_name' AND pid <> pg_backend_pid();
+    " > /dev/null 2>&1
     
-    if [ "$USER_EXISTS" = "1" ]; then
-        print_info "  User '$db_user' already exists"
-    else
-        PGPASSWORD=${TRAVIS_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
-            CREATE USER \"$db_user\" WITH PASSWORD '$db_password';
-        " > /dev/null 2>&1
-        print_success "  ✓ Created user: $db_user (password: $db_password)"
-    fi
+    # Drop database if exists
+    PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
+        DROP DATABASE IF EXISTS $db_name;
+    " > /dev/null 2>&1
     
     # Create database
-    PGPASSWORD=${TRAVIS_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
-        CREATE DATABASE \"$db_name\" OWNER \"$db_user\";
+    PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
+        CREATE DATABASE $db_name;
     " > /dev/null 2>&1
-    print_success "  ✓ Created database: $db_name (owner: $db_user)"
     
-    # Grant all privileges
-    PGPASSWORD=${TRAVIS_PASSWORD} psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
-        GRANT ALL PRIVILEGES ON DATABASE \"$db_name\" TO \"$db_user\";
-    " > /dev/null 2>&1
-    print_success "  ✓ Granted privileges to user: $db_user"
-    echo ""
+    print_success "✓ Database '$db_name' recreated"
 }
 
-# Function to execute SQL file for a specific database
+# Function to create database user
+create_database_user() {
+    local db_name=$1
+    local username=$db_name
+    local password=$db_name
+    
+    # Check if user exists
+    USER_EXISTS=$(PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -tAc "SELECT 1 FROM pg_user WHERE usename='$username'")
+    
+    if [ "$USER_EXISTS" = "1" ]; then
+        print_info "  User '$username' already exists"
+    else
+        PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
+            CREATE USER $username WITH PASSWORD '$password';
+        " > /dev/null 2>&1
+        print_success "  ✓ User '$username' created (password: $password)"
+    fi
+    
+    # Grant privileges
+    PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d postgres -c "
+        GRANT ALL PRIVILEGES ON DATABASE $db_name TO $username;
+    " > /dev/null 2>&1
+}
+
+# Function to execute SQL file
 execute_sql_file() {
     local sql_file=$1
     local db_name=$2
-    local db_user=$db_name
-    local db_password=$db_name
-    local service_name=$3
-    local file_type=$4
+    local file_type=$3
     
     print_step "  Executing: $(basename $sql_file)"
-    echo "           Service: $service_name | Type: $file_type | Database: $db_name"
     
-    if PGPASSWORD=$db_password psql -h $DB_HOST -p $DB_PORT -U $db_user -d $db_name -f "$sql_file" > /dev/null 2>&1; then
+    if PGPASSWORD=$TRAVIS_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $TRAVIS_USER -d $db_name -f "$sql_file" > /dev/null 2>&1; then
         print_success "  ✓ Successfully executed"
         return 0
     else
         print_error "  ✗ Failed to execute"
-        print_warning "  Continuing with next file..."
         return 1
     fi
 }
 
-# Function to initialize all databases with their SQL files
-initialize_all_databases() {
-    print_info "Initializing all discovered databases..."
-    echo ""
+# Function to initialize all databases
+initialize_databases() {
+    local init_success=0
+    local init_fail=0
+    local insert_success=0
+    local insert_fail=0
     
-    local total_success=0
-    local total_fail=0
-    
-    # Process each discovered database
-    for db_name in "${DISCOVERED_DATABASES[@]}"; do
+    for db_name in "${!DATABASES[@]}"; do
         echo "========================================"
         echo "  Database: $db_name"
         echo "========================================"
         echo ""
         
-        local db_success=0
-        local db_fail=0
+        # Step 1: Recreate database
+        recreate_database "$db_name"
         
-        # Phase 1: Execute *_init.sql for this database
-        print_info "Phase 1: Creating tables for '$db_name'..."
-        
-        while IFS= read -r sql_file; do
-            # Extract service name from path
-            service_name=$(echo "$sql_file" | sed -E 's|.*backend/([^/]+/[^/]+)/.*|\1|')
-            
-            if execute_sql_file "$sql_file" "$db_name" "$service_name" "INIT"; then
-                db_success=$((db_success + 1))
-            else
-                db_fail=$((db_fail + 1))
-            fi
-        done < <(find backend -type f -path "*/src/main/resources/${db_name}_init.sql" | sort)
-        
+        # Step 2: Create database user
+        create_database_user "$db_name"
         echo ""
         
-        # Phase 2: Execute *_insert.sql for this database
-        print_info "Phase 2: Inserting data for '$db_name'..."
+        # Step 3: Execute init SQL
+        print_info "Executing schema initialization..."
+        init_file="${DATABASES[$db_name]}"
+        if execute_sql_file "$init_file" "$db_name" "INIT"; then
+            init_success=$((init_success + 1))
+        else
+            init_fail=$((init_fail + 1))
+        fi
+        echo ""
         
-        while IFS= read -r sql_file; do
-            # Extract service name from path
-            service_name=$(echo "$sql_file" | sed -E 's|.*backend/([^/]+/[^/]+)/.*|\1|')
-            
-            if execute_sql_file "$sql_file" "$db_name" "$service_name" "INSERT"; then
-                db_success=$((db_success + 1))
+        # Step 4: Execute insert SQL (if exists)
+        insert_file="${init_file%_init.sql}_insert.sql"
+        if [ -f "$insert_file" ]; then
+            print_info "Executing data insertion..."
+            if execute_sql_file "$insert_file" "$db_name" "INSERT"; then
+                insert_success=$((insert_success + 1))
             else
-                db_fail=$((db_fail + 1))
+                insert_fail=$((insert_fail + 1))
             fi
-        done < <(find backend -type f -path "*/src/main/resources/${db_name}_insert.sql" | sort)
-        
+        else
+            print_info "No insert file found (optional)"
+        fi
+        echo ""
+    done
+    
+    # Summary
+    echo "========================================"
+    echo "  Execution Summary"
+    echo "========================================"
+    echo ""
+    echo "Schema Initialization (*_init.sql):"
+    echo "  ${GREEN}✓ Success: $init_success${NC}"
+    if [ $init_fail -gt 0 ]; then
+        echo "  ${RED}✗ Failed: $init_fail${NC}"
+    fi
+    echo ""
+    echo "Data Insertion (*_insert.sql):"
+    echo "  ${GREEN}✓ Success: $insert_success${NC}"
+    if [ $insert_fail -gt 0 ]; then
+        echo "  ${RED}✗ Failed: $insert_fail${NC}"
+    fi
+    echo ""
+    echo "Total:"
+    echo "  ${GREEN}✓ Success: $((init_success + insert_success))${NC}"
+    if [ $((init_
         echo ""
         print_success "Database '$db_name' initialized: ✓ $db_success succeeded, ✗ $db_fail failed"
         echo ""
