@@ -109,7 +109,14 @@ start_frontend_service() {
     cd "${PROJECT_ROOT}/frontend/wms-portal"
 
     echo "  🚀 启动 Vue 开发服务器..."
-    pnpm dev > "${PROJECT_ROOT}/frontend-dev.log" 2>&1 &
+    # Try pnpm first, fallback to npm
+    if command -v pnpm &> /dev/null; then
+        pnpm dev > "${PROJECT_ROOT}/frontend-dev.log" 2>&1 &
+    elif [ -f "/opt/homebrew/opt/node@20/bin/pnpm" ]; then
+        /opt/homebrew/opt/node@20/bin/pnpm dev > "${PROJECT_ROOT}/frontend-dev.log" 2>&1 &
+    else
+        npm run dev > "${PROJECT_ROOT}/frontend-dev.log" 2>&1 &
+    fi
     FRONTEND_PID=$!
 
     # 等待前端启动

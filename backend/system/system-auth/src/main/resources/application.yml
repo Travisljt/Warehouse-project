@@ -15,7 +15,7 @@ spring:
   sql:
     init:
       mode: always
-      schema-locations: classpath:schema.sql
+      schema-locations: classpath:auth_init.sql,classpath:auth_insert.sql
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/*.xml
